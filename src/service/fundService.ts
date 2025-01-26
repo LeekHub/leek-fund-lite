@@ -1,7 +1,10 @@
+import { flattenDeep } from 'lodash';
 import * as vscode from 'vscode';
-import { fetchFundData } from '../utils/fetch';
 import type { FundData } from '../utils/fetch';
+import { fetchFundData } from '../utils/fetch';
 import { LeekTreeItem } from '../utils/leekTreeItem';
+import { logger } from '../utils/logger';
+import { FUND_CONFIG_KEY } from '../constants';
 
 export class FundService implements vscode.TreeDataProvider<LeekTreeItem> {
   private _onDidChangeTreeData: vscode.EventEmitter<
@@ -11,55 +14,91 @@ export class FundService implements vscode.TreeDataProvider<LeekTreeItem> {
     LeekTreeItem | undefined | null | void
   > = this._onDidChangeTreeData.event;
 
-  private fundCodes: string[] = [];
+  private loading = false;
   private fundData: FundData[] = [];
 
-  constructor() {
-    this.fundCodes = vscode.workspace
+  getCodes(): string[] {
+    const fundCodes = vscode.workspace
       .getConfiguration()
-      .get('leek-fund-lite.funds', []);
+      .get(FUND_CONFIG_KEY, []);
+
+    return flattenDeep(fundCodes);
+  }
+
+  async addCode(code: string): Promise<void> {
+    const config = vscode.workspace.getConfiguration();
+    const codes = this.getCodes();
+    if (!codes.includes(code)) {
+      await config.update(FUND_CONFIG_KEY, [...codes, code], true);
+      this.refresh();
+      logger.info(`Fund ${code} added`);
+    } else {
+      logger.info(`Fund ${code} already exists`);
+    }
+    this.reload();
+  }
+
+  async deleteCode(code: string): Promise<void> {
+    const config = vscode.workspace.getConfiguration();
+    const codes = this.getCodes();
+    if (codes.includes(code)) {
+      await config.update(
+        FUND_CONFIG_KEY,
+        codes.filter((c) => c !== code),
+        true
+      );
+      this.refresh();
+      logger.info(`Fund ${code} deleted`);
+    } else {
+      logger.info(`Fund ${code} does not exist`);
+    }
+    this.reload();
+  }
+
+  async reload(): Promise<void> {
+    if (this.loading) {
+      return;
+    }
+
+    this.loading = true;
+    this._onDidChangeTreeData.fire();
   }
 
   async refresh(): Promise<void> {
-    this.fundCodes = vscode.workspace
-      .getConfiguration()
-      .get('leek-fund-lite.funds', []);
-    try {
-      this.fundData = await fetchFundData(this.fundCodes);
-      this._onDidChangeTreeData.fire();
-    } catch (error) {
-      console.error(`[LEEK_FUND_LITE] Failed to refresh fund data:`, error);
-      vscode.window.showErrorMessage('Failed to refresh fund data');
-      this._onDidChangeTreeData.fire();
-    }
+    this._onDidChangeTreeData.fire();
   }
 
   getTreeItem(element: LeekTreeItem): vscode.TreeItem {
     return element;
   }
 
-  getChildren(): Thenable<LeekTreeItem[]> {
-    if (!this.fundCodes.length) {
+  async getChildren(): Promise<LeekTreeItem[]> {
+    const codes = this.getCodes();
+
+    if (!codes.length) {
       return Promise.resolve([new LeekTreeItem('0', '', '', '0', 'fund')]);
+    }
+
+    if (this.loading) {
+      this.fundData = await fetchFundData(this.getCodes());
+      this.loading = false;
     }
 
     const fundMap = new Map(this.fundData.map((fund) => [fund.code, fund]));
 
-    return Promise.resolve(
-      this.fundCodes.map((code) => {
-        const fund = fundMap.get(code);
-        if (!fund) {
-          return new LeekTreeItem(code, code, '-', '0', 'fund');
-        }
+    return codes.map((code) => {
+      const fund = fundMap.get(code);
+      if (!fund) {
+        return new LeekTreeItem(code, code, '-', '0', 'fund');
+      }
 
-        return new LeekTreeItem(
-          fund.code,
-          fund.name,
-          fund.estimatedWorth,
-          fund.estimatedWorthPercent,
-          'fund'
-        );
-      })
-    );
+      return new LeekTreeItem(
+        fund.code,
+        fund.name,
+        fund.estimatedWorth,
+        fund.estimatedWorthPercent,
+        'fund'
+      );
+    });
   }
 }

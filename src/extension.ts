@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
+import { APP_NAME } from './constants';
 import { FundService } from './service/fundService';
 import { StockService } from './service/stockService';
 import { LeekTreeItem } from './utils/leekTreeItem';
+import { logger } from './utils/logger';
 
 export function activate(context: vscode.ExtensionContext) {
   const fundService = new FundService();
@@ -13,6 +15,11 @@ export function activate(context: vscode.ExtensionContext) {
   let refreshTimer: NodeJS.Timeout | null = null;
   let isViewVisible = false;
 
+  const outputChannel = vscode.window.createOutputChannel(APP_NAME, {
+    log: true,
+  });
+  logger.initOutputChannel(outputChannel);
+
   const refresh = () => {
     if (refreshTimer) {
       clearTimeout(refreshTimer);
@@ -20,8 +27,8 @@ export function activate(context: vscode.ExtensionContext) {
     }
 
     refreshTimer = setTimeout(() => {
-      fundService.refresh();
-      stockService.refresh();
+      fundService.reload();
+      stockService.reload();
       refreshTimer = null;
     }, 100);
   };
@@ -34,13 +41,13 @@ export function activate(context: vscode.ExtensionContext) {
     if (isViewVisible) {
       if (!loopTimer) {
         loopTimer = setInterval(refresh, interval);
-        console.log('[LEEK_FUND_LITE] Started polling');
+        logger.info('Started polling');
       }
     } else {
       if (loopTimer) {
         clearInterval(loopTimer);
         loopTimer = null;
-        console.log('[LEEK_FUND_LITE] Stopped polling');
+        logger.info('Stopped polling');
       }
     }
   };
@@ -78,80 +85,42 @@ export function activate(context: vscode.ExtensionContext) {
   // Register commands
   context.subscriptions.push(
     vscode.commands.registerCommand('leek-fund-lite.refreshFund', async () => {
-      console.log('[LEEK_FUND_LITE] Refreshing fund data...');
-      await fundService.refresh();
-      console.log('[LEEK_FUND_LITE] Fund data refreshed');
+      logger.info('Refreshing fund data...');
+      await fundService.reload();
+      logger.info('Fund data refreshed');
     }),
     vscode.commands.registerCommand('leek-fund-lite.refreshStock', async () => {
-      console.log('[LEEK_FUND_LITE] Refreshing stock data...');
-      await stockService.refresh();
-      console.log('[LEEK_FUND_LITE] Stock data refreshed');
+      logger.info('Refreshing stock data...');
+      await stockService.reload();
+      logger.info('Stock data refreshed');
     }),
     vscode.commands.registerCommand('leek-fund-lite.addFund', async () => {
-      console.log('[LEEK_FUND_LITE] Adding fund...');
+      logger.info('Adding fund...');
       const code = await vscode.window.showInputBox({
         prompt: 'Please input fund code',
         placeHolder: 'e.g. 000001',
       });
       if (code) {
-        const config = vscode.workspace.getConfiguration();
-        const funds = config.get<string[]>('leek-fund-lite.funds', []);
-        if (!funds.includes(code)) {
-          await config.update('leek-fund-lite.funds', [...funds, code], true);
-          console.log(`[LEEK_FUND_LITE] Fund ${code} added`);
-          fundService.refresh();
-        }
+        await fundService.addCode(code);
       }
     }),
     vscode.commands.registerCommand('leek-fund-lite.addStock', async () => {
-      console.log('[LEEK_FUND_LITE] Adding stock...');
+      logger.info('Adding stock...');
       const code = await vscode.window.showInputBox({
         prompt: 'Please input stock code',
         placeHolder: 'e.g. sh000001',
       });
       if (code) {
-        const config = vscode.workspace.getConfiguration();
-        const stocks = config.get<string[]>('leek-fund-lite.stocks', []);
-        if (!stocks.includes(code)) {
-          await config.update('leek-fund-lite.stocks', [...stocks, code], true);
-          console.log(`[LEEK_FUND_LITE] Stock ${code} added`);
-          stockService.refresh();
-        }
+        await stockService.addCode(code);
       }
     }),
     vscode.commands.registerCommand(
       'leek-fund-lite.deleteFund',
-      async (item) => {
-        if (item) {
-          console.log('[LEEK_FUND_LITE] Deleting fund...');
-          const config = vscode.workspace.getConfiguration();
-          const funds = config.get<string[]>('leek-fund-lite.funds', []);
-          await config.update(
-            'leek-fund-lite.funds',
-            funds.filter((code) => code !== item.code),
-            true
-          );
-          console.log(`[LEEK_FUND_LITE] Fund ${item.code} deleted`);
-          fundService.refresh();
-        }
-      }
+      async (item: LeekTreeItem) => item && fundService.deleteCode(item.code)
     ),
     vscode.commands.registerCommand(
       'leek-fund-lite.deleteStock',
-      async (item) => {
-        if (item) {
-          console.log('[LEEK_FUND_LITE] Deleting stock...');
-          const config = vscode.workspace.getConfiguration();
-          const stocks = config.get<string[]>('leek-fund-lite.stocks', []);
-          await config.update(
-            'leek-fund-lite.stocks',
-            stocks.filter((code) => code !== item.code),
-            true
-          );
-          console.log(`[LEEK_FUND_LITE] Stock ${item.code} deleted`);
-          stockService.refresh();
-        }
-      }
+      async (item: LeekTreeItem) => item && stockService.deleteCode(item.code)
     )
   );
 
@@ -174,11 +143,11 @@ export function activate(context: vscode.ExtensionContext) {
         stockTreeView.dispose();
         stockTreeView = null;
       }
-      console.log('[LEEK_FUND_LITE] Extension is now deactivated');
+      logger.info('Extension is now deactivated');
     },
   });
 
-  console.log('[LEEK_FUND_LITE] Extension is now active!');
+  logger.info('Extension is now active!');
 }
 
 export function deactivate() {

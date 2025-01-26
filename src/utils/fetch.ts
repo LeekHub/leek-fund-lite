@@ -1,5 +1,8 @@
 import * as iconv from 'iconv-lite';
 import fetch from 'node-fetch';
+import * as pLimit from 'p-limit';
+import { logger } from './logger';
+import { CONCURRENCY } from '../constants';
 
 export interface FundData {
   code: string;
@@ -53,58 +56,44 @@ async function fetchSingleFund(code: string): Promise<FundData | null> {
       };
       return fundData;
     } else {
-      console.error(
-        `[LEEK_FUND_LITE] Failed to fetch fund ${code} data:`,
-        data
-      );
+      logger.error(`Failed to fetch fund ${code} data:`, data);
     }
   } catch (e) {
-    console.error(`[LEEK_FUND_LITE] Failed to fetch fund ${code} data:`, e);
+    logger.error(`Failed to fetch fund ${code} data:`, e);
   }
   return null;
 }
 
 export async function fetchFundData(codes: string[]): Promise<FundData[]> {
   if (!codes || !Array.isArray(codes)) {
-    console.error('[LEEK_FUND_LITE] Invalid fund codes:', codes);
+    logger.error('Invalid fund codes:', codes);
     return [];
   }
 
-  console.log('[LEEK_FUND_LITE] Fetching fund data...');
-  const results: FundData[] = [];
-  const batchSize = 10;
+  logger.info('Fetching fund data...');
 
   try {
-    for (let i = 0; i < codes.length; i += batchSize) {
-      const batch = codes.slice(i, i + batchSize);
-      const batchResults = await Promise.allSettled(batch.map(fetchSingleFund));
-      results.push(
-        ...batchResults
-          .filter(
-            (result): result is PromiseFulfilledResult<FundData | null> =>
-              result.status === 'fulfilled'
-          )
-          .map((result) => result.value)
-          .filter((data): data is FundData => data !== null)
-      );
-    }
+    const limit = pLimit(CONCURRENCY);
+
+    const results = await Promise.allSettled(
+      codes.map((code) => limit(() => fetchSingleFund(code)))
+    );
+
+    logger.info('Fund data fetched successfully');
+
+    return results
+      .filter(
+        (result): result is PromiseFulfilledResult<FundData> =>
+          result.status === 'fulfilled' && result.value !== null
+      )
+      .map((result) => result.value);
   } catch (error) {
-    console.error(`[LEEK_FUND_LITE] Failed to fetch fund data:`, error);
-  }
-
-  console.log('[LEEK_FUND_LITE] Fund data fetched successfully');
-  return results;
-}
-
-export async function fetchStockData(codes: string[]): Promise<StockData[]> {
-  if (!codes || !Array.isArray(codes)) {
-    console.error('[LEEK_FUND_LITE] Invalid stock codes:', codes);
+    logger.error(`Failed to fetch fund data:`, error);
     return [];
   }
+}
 
-  console.log('[LEEK_FUND_LITE] Fetching stock data...');
-  const results: StockData[] = [];
-
+export async function fetchStocks(codes: string[]): Promise<StockData[]> {
   try {
     const url = `http://hq.sinajs.cn/list=${codes.join(',')}`;
 
@@ -119,120 +108,147 @@ export async function fetchStockData(codes: string[]): Promise<StockData[]> {
     const arrayBuffer = await response.arrayBuffer();
     const text = iconv.decode(Buffer.from(arrayBuffer), 'GB18030');
 
-    if (text) {
-      const stockList = text.split(';\n').filter(Boolean);
+    if (!text || text.includes('FAILED')) {
+      logger.error(`Failed to fetch stocks data:`, text);
+      return [];
+    }
 
-      for (const stock of stockList) {
-        const [code, data] = stock.split('=');
-        if (data) {
-          const values = data.replace(/^"|"$/g, '').split(',');
-          const stockCode = code.replace('var hq_str_', '');
+    const stockList = text.split(';\n').filter(Boolean);
+    const results: StockData[] = [];
 
-          if (values.length > 1) {
-            if (/^(sh|sz|bj)/.test(stockCode)) {
-              // A-Shares
-              results.push({
+    for (const stock of stockList) {
+      const [code, data] = stock.split('=');
+      if (data) {
+        const values = data.replace(/^"|"$/g, '').split(',');
+        const stockCode = code.replace('var hq_str_', '');
+
+        if (values.length > 1) {
+          let stockData: StockData | null = null;
+
+          if (/^(sh|sz|bj)/.test(stockCode)) {
+            // A-Shares
+            stockData = {
+              code: stockCode,
+              name: values[0],
+              open: values[1],
+              yestclose: values[2],
+              price: values[3],
+              high: values[4],
+              low: values[5],
+              volume: values[8],
+              amount: values[9],
+              time: `${values[30]} ${values[31]}`,
+            };
+          } else if (/^gb_/.test(stockCode)) {
+            // Hong Kong Stocks
+            stockData = {
+              code: stockCode,
+              name: values[0],
+              open: values[5],
+              yestclose: values[26],
+              price: values[1],
+              high: values[6],
+              low: values[7],
+              volume: values[10],
+              amount: 'No Data',
+              time: values[3],
+            };
+          } else if (/^usr_/.test(stockCode)) {
+            // US Stocks
+            stockData = {
+              code: stockCode,
+              name: values[0],
+              open: values[5],
+              yestclose: values[26],
+              price: values[1],
+              high: values[6],
+              low: values[7],
+              volume: values[10],
+              amount: 'No Data',
+              time: values[3],
+            };
+          } else if (/^nf_/.test(stockCode)) {
+            // CN Futures
+            const isStockIndexFuture = /nf_(IC|IF|IH|IM|TF|TS|T\d+|TL)/.test(
+              stockCode
+            );
+
+            if (isStockIndexFuture) {
+              // Stock Index Futures
+              stockData = {
                 code: stockCode,
-                name: values[0],
-                open: values[1],
-                yestclose: values[2],
+                name: values[49].slice(0, -1),
+                open: values[0],
+                yestclose: values[13],
                 price: values[3],
-                high: values[4],
-                low: values[5],
-                volume: values[8],
-                amount: values[9],
-                time: `${values[30]} ${values[31]}`,
-              });
-            } else if (/^gb_/.test(stockCode)) {
-              // Hong Kong Stocks
-              results.push({
+                high: values[1],
+                low: values[2],
+                volume: values[4],
+                amount: 'No Data',
+                time: `${values[values.length - 2]} ${
+                  values[values.length - 1]
+                }`,
+              };
+            } else {
+              // Commodity Futures
+              stockData = {
                 code: stockCode,
                 name: values[0],
-                open: values[5],
-                yestclose: values[26],
-                price: values[1],
-                high: values[6],
-                low: values[7],
-                volume: values[10],
+                open: values[2],
+                yestclose: values[8 + 2],
+                price: values[8],
+                high: values[3],
+                low: values[4],
+                volume: values[8 + 6],
                 amount: 'No Data',
-                time: values[3],
-              });
-            } else if (/^usr_/.test(stockCode)) {
-              // US Stocks
-              results.push({
-                code: stockCode,
-                name: values[0],
-                open: values[5],
-                yestclose: values[26],
-                price: values[1],
-                high: values[6],
-                low: values[7],
-                volume: values[10],
-                amount: 'No Data',
-                time: values[3],
-              });
-            } else if (/^nf_/.test(stockCode)) {
-              // CN Futures
-              const isStockIndexFuture = /nf_(IC|IF|IH|IM|TF|TS|T\d+|TL)/.test(
-                stockCode
-              );
-
-              if (isStockIndexFuture) {
-                // Stock Index Futures
-                results.push({
-                  code: stockCode,
-                  name: values[49].slice(0, -1),
-                  open: values[0],
-                  yestclose: values[13],
-                  price: values[3],
-                  high: values[1],
-                  low: values[2],
-                  volume: values[4],
-                  amount: 'No Data',
-                  time: `${values[values.length - 2]} ${
-                    values[values.length - 1]
-                  }`,
-                });
-              } else {
-                // Commodity Futures
-                results.push({
-                  code: stockCode,
-                  name: values[0],
-                  open: values[2],
-                  yestclose: values[8 + 2],
-                  price: values[8],
-                  high: values[3],
-                  low: values[4],
-                  volume: values[8 + 6],
-                  amount: 'No Data',
-                  time: values[values.length - 2],
-                });
-              }
-            } else if (/^hf_/.test(stockCode)) {
-              // International Futures
-              results.push({
-                code: stockCode,
-                name: values[13],
-                open: values[8],
-                yestclose: values[7],
-                price: values[0],
-                high: values[4],
-                low: values[5],
-                volume: values[14].slice(0, -1),
-                amount: 'No Data',
-                time: values[6],
-              });
+                time: values[values.length - 2],
+              };
             }
+          } else if (/^hf_/.test(stockCode)) {
+            // International Futures
+            stockData = {
+              code: stockCode,
+              name: values[13],
+              open: values[8],
+              yestclose: values[7],
+              price: values[0],
+              high: values[4],
+              low: values[5],
+              volume: values[14].slice(0, -1),
+              amount: 'No Data',
+              time: values[6],
+            };
+          }
+
+          if (stockData) {
+            results.push(stockData);
           }
         }
       }
-    } else {
-      console.error('[LEEK_FUND_LITE] Failed to fetch stock data:', text);
     }
+
+    return results;
   } catch (e) {
-    console.error('[LEEK_FUND_LITE] Failed to fetch stock data:', e);
+    logger.error(`Failed to fetch stocks data:`, e);
+    return [];
+  }
+}
+
+export async function fetchStockData(codes: string[]): Promise<StockData[]> {
+  if (!codes || !Array.isArray(codes)) {
+    logger.error('Invalid stock codes:', codes);
+    return [];
   }
 
-  console.log('[LEEK_FUND_LITE] Stock data fetched successfully');
-  return results;
+  logger.info('Fetching stock data...');
+
+  try {
+    const results = await fetchStocks(codes);
+
+    logger.info('Stock data fetched successfully');
+    return results;
+  } catch (error) {
+    logger.error(`Failed to fetch stock data:`, error);
+    return [];
+  }
 }

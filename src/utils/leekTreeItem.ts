@@ -4,6 +4,10 @@ function padRight(text: string, length: number): string {
   return text + ' '.repeat(Math.max(length - text?.length || 0, 0));
 }
 
+function padLeft(text: string, length: number): string {
+  return ' '.repeat(Math.max(length - text?.length || 0, 0)) + text;
+}
+
 export class LeekTreeItem extends vscode.TreeItem {
   constructor(
     public readonly code: string,
@@ -14,8 +18,8 @@ export class LeekTreeItem extends vscode.TreeItem {
   ) {
     super(name);
 
-    const percentNum = parseFloat(percent);
-    const icon = percentNum >= 0 ? '📈' : '📉';
+    const percentNum = parseFloat(percent) || 0;
+    const icon = percentNum >= 0 ? '🔴' : '🟢';
 
     if (code === '0') {
       this.label = 'No ' + type + ' code configured';
@@ -24,9 +28,11 @@ export class LeekTreeItem extends vscode.TreeItem {
     }
 
     this.label = `${padRight(icon, 4)}${padRight(
-      percentNum + '%',
-      11
-    )}${padRight(String(price || '-'), 15)}「${name || '-'}」`;
+      (percentNum >= 0 ? ' ' : '') + percentNum.toFixed(2) + '%',
+      10
+    )}${padLeft((parseFloat(price) || 0).toFixed(4), 16)}${padLeft('', 12)} ${
+      name || '-'
+    }`;
     this.description = '';
     this.contextValue = type === 'fund' ? 'fundItem' : 'stockItem';
   }
