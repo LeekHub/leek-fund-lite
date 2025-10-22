@@ -27,6 +27,11 @@ export interface StockData {
   time: string;
 }
 
+export interface StockSuggestItem {
+  code: string;
+  name: string;
+}
+
 async function fetchSingleFund(code: string): Promise<FundData | null> {
   try {
     const url = `https://fundgz.1234567.com.cn/js/${code}.js?rt=${new Date().getTime()}`;
@@ -249,6 +254,35 @@ export async function fetchStockData(codes: string[]): Promise<StockData[]> {
     return results;
   } catch (error) {
     logger.error(`Failed to fetch stock data:`, error);
+    return [];
+  }
+}
+
+export async function fetchStockList(): Promise<StockSuggestItem[]> {
+  const url = 'https://leek-hub.vercel.app/api/stocks';
+
+  try {
+    logger.info('Fetching stock list...');
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36',
+      },
+      timeout: 10000,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Request failed with status ${response.status}`);
+    }
+
+    const data = (await response.json()) as { data: StockSuggestItem[] };
+
+    const list = data?.data || [];
+
+    logger.info('Stock list fetched successfully');
+    return list;
+  } catch (error) {
+    logger.error('Failed to fetch stock list:', error);
     return [];
   }
 }

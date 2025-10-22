@@ -1,7 +1,7 @@
 import { flattenDeep } from 'lodash';
 import * as vscode from 'vscode';
-import type { StockData } from '../utils/fetch';
-import { fetchStockData } from '../utils/fetch';
+import type { StockData, StockSuggestItem } from '../utils/fetch';
+import { fetchStockData, fetchStockList } from '../utils/fetch';
 import { LeekTreeItem } from '../utils/leekTreeItem';
 import { logger } from '../utils/logger';
 import { STOCK_CONFIG_KEY } from '../constants';
@@ -16,6 +16,7 @@ export class StockService implements vscode.TreeDataProvider<LeekTreeItem> {
 
   private loading = false;
   private stockData: StockData[] = [];
+  private stockList: StockSuggestItem[] | null = null;
 
   getCodes(): string[] {
     const fundCodes = vscode.workspace
@@ -102,5 +103,12 @@ export class StockService implements vscode.TreeDataProvider<LeekTreeItem> {
 
       return new LeekTreeItem(code, stock.name, stock.price, percent, 'stock');
     });
+  }
+
+  async getStockList(): Promise<StockSuggestItem[]> {
+    if (!this.stockList) {
+      this.stockList = await fetchStockList();
+    }
+    return this.stockList;
   }
 }

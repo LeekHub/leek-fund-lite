@@ -106,13 +106,26 @@ export function activate(context: vscode.ExtensionContext) {
     }),
     vscode.commands.registerCommand('leek-fund-lite.addStock', async () => {
       logger.info('Adding stock...');
-      const code = await vscode.window.showInputBox({
-        prompt: 'Please input stock code',
-        placeHolder: 'e.g. sh000001',
+      const qp = vscode.window.createQuickPick();
+      qp.placeholder = 'Please input stock code or name';
+      qp.show();
+      const stockList = await stockService.getStockList();
+      qp.items = stockList.map((item) => ({
+        label: `${item.code} | ${item.name}`,
+      }));
+      let code: string | undefined;
+      qp.onDidChangeSelection((e) => {
+        if (e[0].label) {
+          code = e[0].label.split('|')[0].trim();
+        }
       });
-      if (code) {
-        await stockService.addCode(code);
-      }
+      qp.onDidAccept(async () => {
+        if (code) {
+          await stockService.addCode(code);
+        }
+        qp.hide();
+        qp.dispose();
+      });
     }),
     vscode.commands.registerCommand(
       'leek-fund-lite.deleteFund',
