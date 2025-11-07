@@ -160,7 +160,7 @@
     "watch": "tsc -watch -p ./",
     "lint": "eslint src --ext ts",
     "format": "prettier --write \"src/**/*.ts\"",
-    "changelog": "standard-changelog --first-release"
+    "changelog": "standard-changelog"
   },
   "dependencies": {
     "iconv-lite": "^0.6.3",
