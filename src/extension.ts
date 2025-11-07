@@ -132,6 +132,14 @@ export function activate(context: vscode.ExtensionContext) {
       async (item: LeekTreeItem) => item && fundService.deleteCode(item.code)
     ),
     vscode.commands.registerCommand(
+      'leek-fund-lite.moveStockUp',
+      async (item: LeekTreeItem) => item && stockService.moveCodeUp(item.code)
+    ),
+    vscode.commands.registerCommand(
+      'leek-fund-lite.moveStockDown',
+      async (item: LeekTreeItem) => item && stockService.moveCodeDown(item.code)
+    ),
+    vscode.commands.registerCommand(
       'leek-fund-lite.deleteStock',
       async (item: LeekTreeItem) => item && stockService.deleteCode(item.code)
     )

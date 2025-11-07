@@ -2,7 +2,7 @@
   "name": "leek-fund-lite",
   "displayName": "Leek Fund Lite",
   "description": "A VSCode extension for viewing fund and stock data",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "license": "MIT",
   "engines": {
     "vscode": "^1.52.0"
@@ -67,6 +67,16 @@
         "icon": "$(add)"
       },
       {
+        "command": "leek-fund-lite.moveStockUp",
+        "title": "Move Stock Up",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "leek-fund-lite.moveStockDown",
+        "title": "Move Stock Down",
+        "icon": "$(arrow-down)"
+      },
+      {
         "command": "leek-fund-lite.deleteFund",
         "title": "Delete Fund",
         "icon": "$(trash)"
@@ -127,9 +137,19 @@
           "group": "inline"
         },
         {
+          "command": "leek-fund-lite.moveStockUp",
+          "when": "view == leekFundLite.stock && viewItem == stockItem",
+          "group": "inline@1"
+        },
+        {
+          "command": "leek-fund-lite.moveStockDown",
+          "when": "view == leekFundLite.stock && viewItem == stockItem",
+          "group": "inline@2"
+        },
+        {
           "command": "leek-fund-lite.deleteStock",
           "when": "view == leekFundLite.stock && viewItem == stockItem",
-          "group": "inline"
+          "group": "inline@3"
         }
       ]
     }

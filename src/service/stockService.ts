@@ -56,6 +56,40 @@ export class StockService implements vscode.TreeDataProvider<LeekTreeItem> {
     this.reload();
   }
 
+  private async moveCodeByOffset(
+    code: string,
+    offset: number
+  ): Promise<void> {
+    const config = vscode.workspace.getConfiguration();
+    const codes = this.getCodes();
+    const currentIndex = codes.indexOf(code);
+    if (currentIndex === -1) {
+      logger.info(`Stock ${code} does not exist`);
+      return;
+    }
+
+    const targetIndex = currentIndex + offset;
+    if (targetIndex < 0 || targetIndex >= codes.length) {
+      return;
+    }
+
+    const newCodes = [...codes];
+    newCodes.splice(currentIndex, 1);
+    newCodes.splice(targetIndex, 0, code);
+
+    await config.update(STOCK_CONFIG_KEY, newCodes, true);
+    logger.info(`Stock ${code} moved ${offset < 0 ? 'up' : 'down'}`);
+    this.refresh();
+  }
+
+  async moveCodeUp(code: string): Promise<void> {
+    await this.moveCodeByOffset(code, -1);
+  }
+
+  async moveCodeDown(code: string): Promise<void> {
+    await this.moveCodeByOffset(code, 1);
+  }
+
   async reload(): Promise<void> {
     if (this.loading) {
       return;
