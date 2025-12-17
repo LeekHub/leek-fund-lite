@@ -156,6 +156,8 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
+    "publish": "vsce publish",
+    "login": "vsce login zomixi",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "lint": "eslint src --ext ts",
