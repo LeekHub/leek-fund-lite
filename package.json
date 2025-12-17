@@ -2,7 +2,7 @@
   "name": "leek-fund-lite",
   "displayName": "Leek Fund Lite",
   "description": "A VSCode extension for viewing fund and stock data",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "license": "MIT",
   "engines": {
     "vscode": "^1.52.0"

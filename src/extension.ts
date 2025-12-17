@@ -110,13 +110,33 @@ export function activate(context: vscode.ExtensionContext) {
       qp.placeholder = 'Please input stock code or name';
       qp.show();
       const stockList = await stockService.getStockList();
-      qp.items = stockList.map((item) => ({
+      const originalItems = stockList.map((item) => ({
         label: `${item.code} | ${item.name}`,
       }));
+      qp.items = originalItems;
       let code: string | undefined;
       qp.onDidChangeSelection((e) => {
         if (e[0].label) {
           code = e[0].label.split('|')[0].trim();
+        }
+      });
+      qp.onDidChangeValue((value) => {
+        const trimmedValue = value.trim();
+        if (trimmedValue) {
+          code = trimmedValue;
+          const filteredItems = originalItems.filter((item) =>
+            item.label.toLowerCase().includes(trimmedValue.toLowerCase())
+          );
+          const customItem = {
+            label: `${trimmedValue} | 自定义代码`,
+          };
+          if (!filteredItems.some((item) => item.label.startsWith(trimmedValue + ' |'))) {
+            qp.items = [customItem, ...filteredItems];
+          } else {
+            qp.items = filteredItems;
+          }
+        } else {
+          qp.items = originalItems;
         }
       });
       qp.onDidAccept(async () => {
