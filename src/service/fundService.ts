@@ -55,6 +55,12 @@ export class FundService implements vscode.TreeDataProvider<LeekTreeItem> {
     this.reload();
   }
 
+  async setCodes(codes: string[]): Promise<void> {
+    const config = vscode.workspace.getConfiguration();
+    await config.update(FUND_CONFIG_KEY, codes, true);
+    await this.reload();
+  }
+
   async reload(): Promise<void> {
     if (this.loading) {
       return;

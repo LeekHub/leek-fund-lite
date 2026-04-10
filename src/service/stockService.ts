@@ -90,6 +90,12 @@ export class StockService implements vscode.TreeDataProvider<LeekTreeItem> {
     await this.moveCodeByOffset(code, 1);
   }
 
+  async setCodes(codes: string[]): Promise<void> {
+    const config = vscode.workspace.getConfiguration();
+    await config.update(STOCK_CONFIG_KEY, codes, true);
+    await this.reload();
+  }
+
   async reload(): Promise<void> {
     if (this.loading) {
       return;

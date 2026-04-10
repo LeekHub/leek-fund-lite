@@ -1,8 +1,8 @@
 import * as iconv from 'iconv-lite';
-import fetch from 'node-fetch';
+import fetch, { Response } from 'node-fetch';
 import * as pLimit from 'p-limit';
 import { logger } from './logger';
-import { CONCURRENCY } from '../constants';
+import { APP_NAME, CONCURRENCY, SYNC_FILE_NAME } from '../constants';
 
 export interface FundData {
   code: string;
@@ -30,6 +30,17 @@ export interface StockData {
 export interface StockSuggestItem {
   code: string;
   name: string;
+}
+
+export interface GistFile {
+  filename: string;
+  content?: string;
+}
+
+export interface GistItem {
+  id: string;
+  description?: string;
+  files: Record<string, GistFile>;
 }
 
 async function fetchSingleFund(code: string): Promise<FundData | null> {
@@ -285,4 +296,91 @@ export async function fetchStockList(): Promise<StockSuggestItem[]> {
     logger.error('Failed to fetch stock list:', error);
     return [];
   }
+}
+
+function getGitHubHeaders(token: string): Record<string, string> {
+  return {
+    Authorization: `Bearer ${token}`,
+    Accept: 'application/vnd.github+json',
+    'Content-Type': 'application/json',
+    'User-Agent': APP_NAME,
+  };
+}
+
+async function parseGitHubResponse<T>(response: Response): Promise<T> {
+  if (!response.ok) {
+    let message = `GitHub request failed with status ${response.status}`;
+    try {
+      const errorData = (await response.json()) as { message?: string };
+      if (errorData.message) {
+        message = errorData.message;
+      }
+    } catch (error) {
+      logger.debug('Failed to parse GitHub error response', error);
+    }
+    throw new Error(message);
+  }
+
+  return (await response.json()) as T;
+}
+
+export async function listGitHubGists(token: string): Promise<GistItem[]> {
+  const response = await fetch('https://api.github.com/gists', {
+    headers: getGitHubHeaders(token),
+    timeout: 10000,
+  });
+
+  return parseGitHubResponse<GistItem[]>(response);
+}
+
+export async function getGitHubGist(token: string, gistId: string): Promise<GistItem> {
+  const response = await fetch(`https://api.github.com/gists/${gistId}`, {
+    headers: getGitHubHeaders(token),
+    timeout: 10000,
+  });
+
+  return parseGitHubResponse<GistItem>(response);
+}
+
+export async function createGitHubGist(
+  token: string,
+  content: string
+): Promise<GistItem> {
+  const response = await fetch('https://api.github.com/gists', {
+    method: 'POST',
+    headers: getGitHubHeaders(token),
+    body: JSON.stringify({
+      description: 'leek-fund-lite sync data',
+      public: false,
+      files: {
+        [SYNC_FILE_NAME]: {
+          content,
+        },
+      },
+    }),
+    timeout: 10000,
+  });
+
+  return parseGitHubResponse<GistItem>(response);
+}
+
+export async function updateGitHubGist(
+  token: string,
+  gistId: string,
+  content: string
+): Promise<GistItem> {
+  const response = await fetch(`https://api.github.com/gists/${gistId}`, {
+    method: 'PATCH',
+    headers: getGitHubHeaders(token),
+    body: JSON.stringify({
+      files: {
+        [SYNC_FILE_NAME]: {
+          content,
+        },
+      },
+    }),
+    timeout: 10000,
+  });
+
+  return parseGitHubResponse<GistItem>(response);
 }

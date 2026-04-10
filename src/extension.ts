@@ -2,12 +2,14 @@ import * as vscode from 'vscode';
 import { APP_NAME } from './constants';
 import { FundService } from './service/fundService';
 import { StockService } from './service/stockService';
+import { SyncService } from './service/syncService';
 import { LeekTreeItem } from './utils/leekTreeItem';
 import { logger } from './utils/logger';
 
 export function activate(context: vscode.ExtensionContext) {
   const fundService = new FundService();
   const stockService = new StockService();
+  const syncService = new SyncService(context, fundService, stockService);
 
   let fundTreeView: vscode.TreeView<LeekTreeItem> | null = null;
   let stockTreeView: vscode.TreeView<LeekTreeItem> | null = null;
@@ -19,6 +21,15 @@ export function activate(context: vscode.ExtensionContext) {
     log: true,
   });
   logger.initOutputChannel(outputChannel);
+
+  const updateGitHubContext = async () => {
+    const hasToken = await syncService.hasGitHubToken();
+    await vscode.commands.executeCommand(
+      'setContext',
+      'leekFundLite.githubLoggedIn',
+      hasToken
+    );
+  };
 
   const refresh = () => {
     if (refreshTimer) {
@@ -81,6 +92,7 @@ export function activate(context: vscode.ExtensionContext) {
     refresh();
   }
   updatePolling();
+  updateGitHubContext();
 
   // Register commands
   context.subscriptions.push(
@@ -162,7 +174,106 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(
       'leek-fund-lite.deleteStock',
       async (item: LeekTreeItem) => item && stockService.deleteCode(item.code)
-    )
+    ),
+    vscode.commands.registerCommand('leek-fund-lite.githubActions', async () => {
+      try {
+        const hasToken = await syncService.hasGitHubToken();
+        const actions: vscode.QuickPickItem[] = hasToken
+          ? [
+              { label: 'Upload', description: 'Upload local data to GitHub Gist' },
+              { label: 'Download', description: 'Download data from GitHub Gist' },
+              { label: 'Logout', description: 'Clear saved GitHub token' },
+            ]
+          : [
+              { label: 'Login', description: 'Save GitHub personal token' },
+              { label: 'Upload', description: 'Upload local data to GitHub Gist' },
+              { label: 'Download', description: 'Download data from GitHub Gist' },
+            ];
+
+        const selected = await vscode.window.showQuickPick(actions, {
+          title: 'GitHub',
+          ignoreFocusOut: true,
+        });
+
+        if (!selected) {
+          return;
+        }
+
+        if (selected.label === 'Login') {
+          const saved = await syncService.githubLogin();
+          if (saved) {
+            await updateGitHubContext();
+          }
+          return;
+        }
+
+        if (selected.label === 'Logout') {
+          await syncService.githubLogout();
+          await updateGitHubContext();
+          return;
+        }
+
+        if (selected.label === 'Upload') {
+          await syncService.githubUpload();
+          await updateGitHubContext();
+          return;
+        }
+
+        if (selected.label === 'Download') {
+          await syncService.githubDownload();
+          await updateGitHubContext();
+        }
+      } catch (error) {
+        logger.error('GitHub actions failed', error);
+        vscode.window.showErrorMessage(
+          error instanceof Error ? error.message : 'GitHub actions failed'
+        );
+      }
+    }),
+    vscode.commands.registerCommand('leek-fund-lite.githubLogin', async () => {
+      try {
+        const saved = await syncService.githubLogin();
+        if (saved) {
+          await updateGitHubContext();
+        }
+      } catch (error) {
+        logger.error('GitHub login failed', error);
+        vscode.window.showErrorMessage(
+          error instanceof Error ? error.message : 'GitHub login failed'
+        );
+      }
+    }),
+    vscode.commands.registerCommand('leek-fund-lite.githubLogout', async () => {
+      try {
+        await syncService.githubLogout();
+        await updateGitHubContext();
+      } catch (error) {
+        logger.error('GitHub logout failed', error);
+        vscode.window.showErrorMessage(
+          error instanceof Error ? error.message : 'GitHub logout failed'
+        );
+      }
+    }),
+    vscode.commands.registerCommand('leek-fund-lite.githubUpload', async () => {
+      try {
+        await syncService.githubUpload();
+      } catch (error) {
+        logger.error('GitHub upload failed', error);
+        vscode.window.showErrorMessage(
+          error instanceof Error ? error.message : 'GitHub upload failed'
+        );
+      }
+    }),
+    vscode.commands.registerCommand('leek-fund-lite.githubDownload', async () => {
+      try {
+        await syncService.githubDownload();
+      } catch (error) {
+        logger.error('GitHub download failed', error);
+        vscode.window.showErrorMessage(
+          error instanceof Error ? error.message : 'GitHub download failed'
+        );
+      }
+    })
   );
 
   // Cleanup function

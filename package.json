@@ -2,7 +2,7 @@
   "name": "leek-fund-lite",
   "displayName": "Leek Fund Lite",
   "description": "A VSCode extension for viewing fund and stock data",
-  "version": "1.0.9",
+  "version": "1.1.0",
   "license": "MIT",
   "engines": {
     "vscode": "^1.52.0"
@@ -85,6 +85,27 @@
         "command": "leek-fund-lite.deleteStock",
         "title": "Delete Stock",
         "icon": "$(trash)"
+      },
+      {
+        "command": "leek-fund-lite.githubActions",
+        "title": "GitHub",
+        "icon": "$(github)"
+      },
+      {
+        "command": "leek-fund-lite.githubLogin",
+        "title": "GitHub Login"
+      },
+      {
+        "command": "leek-fund-lite.githubLogout",
+        "title": "GitHub Logout"
+      },
+      {
+        "command": "leek-fund-lite.githubUpload",
+        "title": "GitHub Upload"
+      },
+      {
+        "command": "leek-fund-lite.githubDownload",
+        "title": "GitHub Download"
       }
     ],
     "configuration": {
@@ -120,6 +141,11 @@
           "group": "navigation"
         },
         {
+          "command": "leek-fund-lite.githubActions",
+          "when": "view == leekFundLite.fund",
+          "group": "navigation@1"
+        },
+        {
           "command": "leek-fund-lite.addStock",
           "when": "view == leekFundLite.stock",
           "group": "navigation"
@@ -128,6 +154,11 @@
           "command": "leek-fund-lite.refreshStock",
           "when": "view == leekFundLite.stock",
           "group": "navigation"
+        },
+        {
+          "command": "leek-fund-lite.githubActions",
+          "when": "view == leekFundLite.stock",
+          "group": "navigation@1"
         }
       ],
       "view/item/context": [
